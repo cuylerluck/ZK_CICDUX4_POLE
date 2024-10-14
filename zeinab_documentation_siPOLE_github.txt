@@ -1,0 +1,130 @@
+Each section contains a header describing the block, followed by the code itself, in this format:
+
+----------------------
+Header 
+---
+Code block
+---
+----------------------
+
+Tools used:
+STAR (2.7.10b)
+MultiQC (1.13)
+samtools (1.17)
+fastqc (0.11.9)
+deeptools (3.5.1)
+
+
+
+Contact cuyler.luck@ucsf.edu or ross.okimoto@ucsf.edu with questions.
+
+
+
+----------------------
+We first need to download a reference genome in FASTA format and genome annotation file in GTF format from ENSEMBL. Here we downloaded GRCh38.p13, or release 108, from the ENSEMBL FTP server. We previously downloaded these, but if you need to download these you can use wget and expand the compressed files using gzip.
+---
+wget https://ftp.ensembl.org/pub/release-108/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna_sm.primary_assembly.fa.gz
+
+wget https://ftp.ensembl.org/pub/release-108/gtf/homo_sapiens/Homo_sapiens.GRCh38.108.gtf.gz
+
+gzip -d Homo_sapiens.GRCh38.dna_sm.primary_assembly.fa.gz
+
+gzip -d Homo_sapiens.GRCh38.108.gtf.gz
+---
+----------------------
+
+
+----------------------
+We next need to create an index for STAR to use based on the reference genome FASTA and GTF files. We chose to use --sjdbOverhang 149 because we had reads of length 150bp, and the recommendation from the STAR manual is to use max(ReadLength)-1. 
+
+We have done this for a previous project so we don't need to rerun this, but here's how you could do it:
+---
+star_index.sh =
+
+#!/bin/bash           # the shell language when run outside of the job scheduler
+#                     # lines starting with #$ is an instruction to the job scheduler
+#$ -S /bin/bash       # the shell language when run via the job scheduler [IMPORTANT]
+##$ -cwd               # job should run in the current working directory (disabled)
+#$ -j n               # STDERR and STDOUT should not be joined
+#$ -l mem_free=16G     # job requires up to 16 GiB of RAM per slot
+#$ -l scratch=200G      # job requires up to 200 GiB of local /scratch space
+##$ -l h_rt=3:00:00   # job requires up to 3 hours of runtime (disabled)
+#$ -r n               # if job crashes, it should not be restarted
+
+module load CBI star
+
+STAR --runThreadN "${NSLOTS:-1}" --runMode genomeGenerate --genomeDir ./star_index --genomeFastaFiles ./Raw/Homo_sapiens.GRCh38.dna_sm.primary_assembly.fa --sjdbGTFfile ./Raw/Homo_sapiens.GRCh38.108.gtf --sjdbOverhang 149
+
+## End-of-job summary, if running as a job
+[[ -n "$JOB_ID" ]] && qstat -j "$JOB_ID"
+---
+Submit job in NicoleMar2023 directory with:
+qsub -pe smp 8 -cwd -m bea star_index.sh
+----------------------
+
+
+----------------------
+Next, we can perform STAR alignment of all samples, one at a time. After generating an alignment as a .sam file, we converted to a .bam file using samtools and then deleted the .sam file due to disk space limitations.
+We used --quantMode GeneCounts to extract gene counts at the same time as alignment was performed.
+I am also generating a FASTQC report for the fastq files at the same time, for quality control.
+Also having samtools index the .bam files.
+
+Run in home directory with:
+qsub -pe smp 8 -cwd -m bea zeinab_star_aligning.sh
+---
+#!/bin/bash           # the shell language when run outside of the job scheduler
+#                     # lines starting with #$ is an instruction to the job scheduler
+#$ -S /bin/bash       # the shell language when run via the job scheduler [IMPORTANT]
+##$ -cwd               # job should run in the current working directory (disabled)
+#$ -j n               # STDERR and STDOUT should be joined
+#$ -l mem_free=16G     # job requires up to 16 GiB of RAM per slot
+#$ -l scratch=200G      # job requires up to 200 GiB of local /scratch space
+##$ -l h_rt=3:00:00   # job requires up to 3 hours of runtime (disabled)
+#$ -r n               # if job crashes, it should not be restarted
+
+module load CBI star samtools fastqc
+
+for sample in A1_NC_X1 A2_siPE_X1 B1_NC_X1 B2_siPE_X1 C1_NC_CDS2 C2_siPE_CDS2 D1_NC_CDS2 D2_siPE_CDS2 
+do
+	STAR --runThreadN "${NSLOTS:-1}" --genomeDir ./NicoleMar2023/star_index --readFilesIn ./Zeinab_siPOLE_Nov2023/raw/${sample}_1.fq.gz ./Zeinab_siPOLE_Nov2023/raw/${sample}_2.fq.gz --readFilesCommand zcat --outFileNamePrefix ./Zeinab_siPOLE_Nov2023/alignments/star/$sample --quantMode GeneCounts
+	samtools sort -@ "${NSLOTS:-1}" -o ./Zeinab_siPOLE_Nov2023/alignments/star/$sample.bam ./Zeinab_siPOLE_Nov2023/alignments/star/*.sam
+	rm ./Zeinab_siPOLE_Nov2023/alignments/star/*.sam
+	samtools index -b -@ "${NSLOTS:-1}" ./Zeinab_siPOLE_Nov2023/alignments/star/$sample.bam
+	fastqc ./Zeinab_siPOLE_Nov2023/raw/${sample}_1.fq.gz ./Zeinab_siPOLE_Nov2023/raw/${sample}_2.fq.gz
+done
+
+## End-of-job summary, if running as a job
+[[ -n "$JOB_ID" ]] && qstat -j "$JOB_ID"
+---
+----------------------
+
+
+----------------------
+Pulling down all FASTQC files, relevant log files, bam/bai files, and gene count files with SCP.
+---
+
+---
+----------------------
+
+----------------------
+Combining FASTQC reports with MultiQC
+(Run in directory that contains all *_fastqc.zip reports)
+---
+
+Command format:
+
+multiqc .
+---
+----------------------
+
+----------------------
+Notes on QC
+---
+
+FASTQC reports look fine. No obvious weird stuff that doesn't make sense. All samples had unique mapping rates above 90%, that's good.
+
+
+Unique mapped reads is in Log.final.out files from STAR, not FASTQC report.
+
+---
+----------------------
