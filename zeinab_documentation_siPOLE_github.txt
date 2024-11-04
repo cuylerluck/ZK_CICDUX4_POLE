@@ -18,6 +18,8 @@ deeptools (3.5.1)
 
 Contact cuyler.luck@ucsf.edu or ross.okimoto@ucsf.edu with questions.
 
+Please note that this experiment initially included 8 distinct samples, but only 4 were used for the whole analysis due to technical issues with the other 4.
+
 
 
 ----------------------
