@@ -6,4 +6,4 @@ There are two files, with their purposes described below:
 
 ***zeinab_documentation_siPOLE_github.txt*** A .txt file containing a description of how .fastq files were processed with STAR and other tools both locally and on Wynton, the UCSF HPC.
 
-***Zeinab_siPOLE_processing.R*** An R script describing how the data was analyzed, including differential gene expression analysis with edgeR.
+***X1_Zeinab_siPOLE_processing.R*** An R script describing how the data was analyzed, including differential gene expression analysis with edgeR.
